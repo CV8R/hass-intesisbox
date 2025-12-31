@@ -1,16 +1,57 @@
-# hass-intesisbox
+# Intesis Gateway for Home Assistant
 
-Home Assistant IntesisBox Climate Platform
+Control HMS Intesis Air Conditioning Gateways locally via the WMP Protocol.
 
-This platform allows Home Assistant to control IntesisBox devices https://www.intesisbox.com/en/wifi/gateways/ using the WMP protocol.
+## Installation
 
-Unlike IntesisHome, IntesisBox allows for control through the local network via TCP sockets which is better suited for using with home automation platforms.
+### Option 1: HACS (Recommended)
 
-This has only been tested with a device emulator to the specifications, please report any issues or create a pull request.
+1. Open HACS in your Home Assistant instance
+2. Click on "Integrations"
+3. Click the three dots in the top right corner
+4. Select "Custom repositories"
+5. Add the repository URL: `https://github.com/jnimmo/hass-intesisbox`
+6. Select "Integration" as the category
+7. Click "Add"
+8. Click "Install" on the IntesisBox card that appears
+9. Restart Home Assistant
+10. Go to Settings → Devices & Services
+11. Click "Add Integration"
+12. Search for "Intesis Gateway" and select it
+13. Enter your Intesis Gateway IP address as the host
 
-### Usage
+### Option 2: Manual Installation
 
-To use in your installation:
+1. Download the `intesisbox` directory from this repository
+2. Copy it into your `custom_components` directory (create it if it doesn't exist)
+3. Restart Home Assistant
+4. Go to Settings → Devices & Services
+5. Click "Add Integration"
+6. Search for "Intesis Gateway" and select it
+7. Enter your Intesis Gateway IP address and name it
 
-1. Download the intesisbox directory into your custom_components directory
-2. Add the new "IntesisBox" integration in Home Assistant. Set as host the IntesisBox IP
+## Configuration
+
+**Settings → Devices & Services → Add Integration → "Intesis Gateway"**
+
+Fan and Swing modes can be customized after setup via Gear Icon in the Intesis Gateway Integration.
+
+## Troubleshooting
+
+**Device Unavailable:**
+- Verify IP address and network connectivity
+- Check port 3310 is not blocked
+
+### Debug Logging
+
+Add the logger configuration to `configuration.yaml` and restart Home Assistant.
+```yaml
+  logs:
+    custom_components.intesisbox: debug
+    custom_components.intesisbox.intesisbox: debug
+    custom_components.intesisbox.climate: debug
+```
+
+## Credits
+
+Original: [@jnimmo](https://github.com/jnimmo)
