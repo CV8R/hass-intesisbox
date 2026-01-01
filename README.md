@@ -52,6 +52,31 @@ Add the logger configuration to `configuration.yaml` and restart Home Assistant.
     custom_components.intesisbox.climate: debug
 ```
 
+## IntesisBox Emulator
+
+Emulates IntesisBox WMP protocol device on TCP port 3310.
+
+### Usage
+
+```bash
+# Run with defaults
+python IntesisBoxEmulator.py
+
+# Get help
+python IntesisBoxEmulator.py --help
+
+# Example with custom V/H vane and fan positions
+python IntesisBoxEmulator.py --VUD A7S --VLR A5S --FAN A4
+```
+
+### Compact Notation Format
+
+Pattern: `[A][X][S]`
+* A = includes AUTO
+* X = number of positions (1-9)
+* S = includes SWING (vanes only, not for fan)
+* N = disabled (LIMITS queries are ignored, no response sent)
+
 ## Credits
 
 Original: [@jnimmo](https://github.com/jnimmo)
