@@ -194,8 +194,12 @@ class IntesisBoxAC(ClimateEntity):
             if device_mode in self._fan_mode_map:
                 self._fan_list.append(self._fan_mode_map[device_mode])
 
+        # Fan speeds are optional - some devices may not support fan control
         if len(self._fan_list) < 1:
-            raise PlatformNotReady("Controller hasn't finished initializing device")
+            _LOGGER.info(
+                "%s No fan speeds available (device may not support fan control)",
+                self._log_prefix,
+            )
         self._fan_speed: str | None = None
 
         # Setup operation list
@@ -234,10 +238,6 @@ class IntesisBoxAC(ClimateEntity):
         if has_vertical or has_horizontal:
             features |= ClimateEntityFeature.SWING_MODE
 
-            # Add horizontal swing feature if device has horizontal vanes
-            if has_horizontal:
-                features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
-
             _LOGGER.info(
                 "%s Vane control detected - vertical: %s, horizontal: %s, independent: %s",
                 self._log_prefix,
@@ -245,6 +245,11 @@ class IntesisBoxAC(ClimateEntity):
                 self._controller.vane_horizontal_list,
                 self._has_independent_control,
             )
+
+            # Architecture:
+            # - If BOTH vertical and horizontal: use swing_modes for vertical, swing_horizontal_modes for horizontal
+            # - If ONLY vertical: use swing_modes
+            # - If ONLY horizontal: use swing_modes (map horizontal to primary swing control)
 
             # Build vertical swing modes (if available)
             if has_vertical:
@@ -275,14 +280,24 @@ class IntesisBoxAC(ClimateEntity):
                             self._vane_horizontal_map[device_vane]
                         )
 
-                self._attr_swing_horizontal_modes = (
-                    self._swing_horizontal_list
-                )  # Set _attr_ for base class
-                _LOGGER.info(
-                    "%s Horizontal swing modes: %s",
-                    self._log_prefix,
-                    self._swing_horizontal_list,
-                )
+                if self._has_independent_control:
+                    # Both vanes exist - use horizontal modes for horizontal control
+                    features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
+                    self._attr_swing_horizontal_modes = self._swing_horizontal_list
+                    _LOGGER.info(
+                        "%s Horizontal swing modes: %s",
+                        self._log_prefix,
+                        self._swing_horizontal_list,
+                    )
+                else:
+                    # Only horizontal vanes - map to primary swing_modes
+                    self._swing_list = self._swing_horizontal_list
+                    self._attr_swing_modes = self._swing_list
+                    _LOGGER.info(
+                        "%s Horizontal vanes (as primary swing): %s",
+                        self._log_prefix,
+                        self._swing_list,
+                    )
         else:
             self._has_independent_control = False
             _LOGGER.info(
@@ -434,31 +449,56 @@ class IntesisBoxAC(ClimateEntity):
             raise
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        """Set the vertical swing mode."""
-        _LOGGER.debug(
-            "%s async_set_swing_mode (vertical): %s", self._log_prefix, swing_mode
-        )
+        """Set the swing mode (vertical vanes, or horizontal if device only has horizontal)."""
+        _LOGGER.debug("%s async_set_swing_mode: %s", self._log_prefix, swing_mode)
 
-        # Convert friendly name to device value
-        device_value = self._vane_vertical_reverse.get(swing_mode)
-        if not device_value:
-            _LOGGER.error(
-                "%s Unknown vertical swing mode: %s", self._log_prefix, swing_mode
-            )
-            return
-
-        try:
-            await self.hass.async_add_executor_job(
-                self._controller.set_vertical_vane, device_value
-            )
-        except Exception as err:
-            _LOGGER.error(
-                "%s Failed to set vertical swing to %s: %s",
+        # If only horizontal vanes exist, route to horizontal control
+        if (
+            not self._controller.vane_vertical_list
+            and self._controller.vane_horizontal_list
+        ):
+            _LOGGER.debug(
+                "%s Routing swing_mode to horizontal vane (device has horizontal only)",
                 self._log_prefix,
-                swing_mode,
-                err,
             )
-            raise
+            device_value = self._vane_horizontal_reverse.get(swing_mode)
+            if not device_value:
+                _LOGGER.error(
+                    "%s Unknown horizontal swing mode: %s", self._log_prefix, swing_mode
+                )
+                return
+            try:
+                await self.hass.async_add_executor_job(
+                    self._controller.set_horizontal_vane, device_value
+                )
+            except Exception as err:
+                _LOGGER.error(
+                    "%s Failed to set horizontal swing to %s: %s",
+                    self._log_prefix,
+                    swing_mode,
+                    err,
+                )
+                raise
+        else:
+            # Normal vertical vane control
+            device_value = self._vane_vertical_reverse.get(swing_mode)
+            if not device_value:
+                _LOGGER.error(
+                    "%s Unknown vertical swing mode: %s", self._log_prefix, swing_mode
+                )
+                return
+            try:
+                await self.hass.async_add_executor_job(
+                    self._controller.set_vertical_vane, device_value
+                )
+            except Exception as err:
+                _LOGGER.error(
+                    "%s Failed to set vertical swing to %s: %s",
+                    self._log_prefix,
+                    swing_mode,
+                    err,
+                )
+                raise
 
     async def async_set_swing_horizontal_mode(self, swing_mode: str) -> None:
         """Set the horizontal swing mode."""
@@ -653,7 +693,14 @@ class IntesisBoxAC(ClimateEntity):
 
     @property
     def swing_mode(self) -> str | None:
-        """Return current vertical swing mode."""
+        """Return current swing mode (vertical, or horizontal if device only has horizontal)."""
+        # If only horizontal vanes exist, return horizontal state
+        if (
+            not self._controller.vane_vertical_list
+            and self._controller.vane_horizontal_list
+        ):
+            return self._current_vane_horizontal
+        # Otherwise return vertical state
         return self._current_vane_vertical
 
     @property

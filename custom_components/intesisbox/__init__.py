@@ -38,14 +38,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Wait for the connection to be established and initialized
     _LOGGER.debug("Waiting for connection and initialization...")
     for i in range(150):  # Wait up to 15 seconds for all limits including vanes
-        if (
-            controller.is_connected
-            and len(controller.fan_speed_list) > 0
-            and len(controller.operation_list) > 0
-        ):
-            # Core initialization is done, wait a bit longer for vanes
-            # Vanes are queried after MODE, so they arrive later
-            if i >= 60:  # After 6 seconds, proceed (vanes should be loaded by then)
+        if controller.is_connected and len(controller.operation_list) > 0:
+            # Core initialization is done (have connection and operation modes)
+            # Wait a bit longer for optional features (fan speeds, vanes)
+            if i >= 60:  # After 6 seconds, proceed even if optional features missing
                 # Build log prefix matching the format used elsewhere
                 if controller.device_mac_address:
                     entity_id = f"climate.{controller.device_mac_address.lower()}"
@@ -54,8 +50,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     log_prefix = f"[{host}]"
 
                 _LOGGER.info(
-                    "%s Intesis Gateway initialized (vanes: v=%d h=%d)",
+                    "%s Intesis Gateway initialized (fans: %d, vanes: v=%d h=%d)",
                     log_prefix,
+                    len(controller.fan_speed_list),
                     len(controller.vane_vertical_list),
                     len(controller.vane_horizontal_list),
                 )
@@ -88,8 +85,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if controller:
             _LOGGER.debug("Stopping controller")
             controller.stop()
-            # Give it a moment to cleanup
-            await asyncio.sleep(0.1)
+            # Give device time to cleanup connection (minimum 2 seconds)
+            # This prevents rapid reconnection which some devices may reject
+            await asyncio.sleep(2.0)
 
     return unload_ok
 
