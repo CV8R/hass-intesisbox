@@ -1,6 +1,6 @@
 # Intesis Gateway for Home Assistant
 
-Control HMS Intesis Air Conditioning Gateways locally via the WMP Protocol.
+Control Intesis Air Conditioning Gateways locally via the WMP Protocol.
 
 ## Installation
 
