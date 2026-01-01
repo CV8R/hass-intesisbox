@@ -48,8 +48,6 @@ Add the logger configuration to `configuration.yaml` and restart Home Assistant.
 ```yaml
   logs:
     custom_components.intesisbox: debug
-    custom_components.intesisbox.intesisbox: debug
-    custom_components.intesisbox.climate: debug
 ```
 
 ## IntesisBox Emulator
