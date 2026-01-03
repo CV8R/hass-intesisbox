@@ -95,6 +95,10 @@ class IntesisBox(asyncio.Protocol):
         # Command retry tracking
         self._command_retry_counts: dict[str, int] = {}
 
+        # Disconnect event for clean shutdown
+        self._disconnect_event: asyncio.Event = asyncio.Event()
+        self._disconnect_event.set()  # Initially set (not connected)
+
     def connection_made(self, transport: asyncio.BaseTransport) -> None:  # type: ignore[override]
         """Asyncio callback for a successful connection."""
         _LOGGER.info(
@@ -105,6 +109,9 @@ class IntesisBox(asyncio.Protocol):
         _LOGGER.debug(
             "%s Transport stored, scheduling initial state query", self._log_prefix
         )
+
+        # Clear disconnect event (connection is now active)
+        self._disconnect_event.clear()
 
         # Clear any pending retry counts since connection is now established
         self._command_retry_counts.clear()
@@ -432,6 +439,9 @@ class IntesisBox(asyncio.Protocol):
         self._connectionStatus = API_DISCONNECTED
         self._cancel_background_tasks()
 
+        # Signal that connection is now fully closed
+        self._disconnect_event.set()
+
         if exc:
             _LOGGER.warning("%s Connection lost with error: %s", self._log_prefix, exc)
         else:
@@ -507,6 +517,28 @@ class IntesisBox(asyncio.Protocol):
                 _LOGGER.error("%s Error closing transport: %s", self._log_prefix, err)
             finally:
                 self._transport = None
+
+    async def wait_for_disconnect(self, timeout: float = 5.0) -> bool:
+        """Wait for connection to fully close.
+
+        Args:
+            timeout: Maximum time to wait in seconds
+
+        Returns:
+            True if disconnect completed, False if timeout
+
+        """
+        try:
+            await asyncio.wait_for(self._disconnect_event.wait(), timeout=timeout)
+            _LOGGER.debug("%s Disconnect completed", self._log_prefix)
+            return True
+        except TimeoutError:
+            _LOGGER.warning(
+                "%s Disconnect did not complete within %ss timeout",
+                self._log_prefix,
+                timeout,
+            )
+            return False
 
     def _schedule_task(self, coro):
         """Schedule a coroutine on the event loop (thread-safe)."""

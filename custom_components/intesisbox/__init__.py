@@ -85,9 +85,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if controller:
             _LOGGER.debug("Stopping controller")
             controller.stop()
-            # Give device time to cleanup connection (minimum 2 seconds)
-            # This prevents rapid reconnection which some devices may reject
-            await asyncio.sleep(2.0)
+            # Wait for connection to ACTUALLY close (not just initiated)
+            disconnect_ok = await controller.wait_for_disconnect(timeout=5.0)
+            if disconnect_ok:
+                # Connection closed successfully, now enforce protocol minimum delay
+                _LOGGER.debug("Connection closed, waiting protocol minimum delay")
+                await asyncio.sleep(1.0)
+            else:
+                # Timeout waiting for disconnect, use longer delay to be safe
+                _LOGGER.warning("Disconnect timeout, using extended delay")
+                await asyncio.sleep(3.0)
 
     return unload_ok
 
