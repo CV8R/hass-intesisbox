@@ -61,7 +61,13 @@ class IntesisBoxEmulator(asyncio.Protocol):
     # Class variable to store persistent device state across connections
     _device_state = None
 
-    def __init__(self, vaneud_limits=None, vanelr_limits=None, fansp_limits=None, dynamic_setptemp=False):
+    def __init__(
+        self,
+        vaneud_limits=None,
+        vanelr_limits=None,
+        fansp_limits=None,
+        dynamic_setptemp=False,
+    ):
         """Build an emulator, not much to see here."""
         self.mode = "AUTO"
         self.setpoint = "210"
@@ -103,7 +109,7 @@ class IntesisBoxEmulator(asyncio.Protocol):
     def connection_made(self, transport):
         """Store connection when setup."""
         self.transport = transport
-        peername = transport.get_extra_info('peername')
+        peername = transport.get_extra_info("peername")
 
         current_time = time.time()
         self.connection_time = current_time
@@ -114,7 +120,9 @@ class IntesisBoxEmulator(asyncio.Protocol):
             reconnect_interval = current_time - IntesisBoxEmulator._last_disconnect_time
             if reconnect_interval < MIN_RECONNECT_INTERVAL:
                 print(f"⚠️  WARNING: Connection from {peername} violated protocol!")
-                print(f"   Reconnected after {reconnect_interval:.3f}s (min required: {MIN_RECONNECT_INTERVAL}s)")
+                print(
+                    f"   Reconnected after {reconnect_interval:.3f}s (min required: {MIN_RECONNECT_INTERVAL}s)"
+                )
 
         print(f"✓ Connection established from {peername}")
 
@@ -135,7 +143,9 @@ class IntesisBoxEmulator(asyncio.Protocol):
         if self.last_activity_time:
             idle_time = current_time - self.last_activity_time
             if idle_time > SOCKET_IDLE_TIMEOUT:
-                print(f"⚠️  WARNING: Socket was idle for {idle_time:.1f}s (timeout: {SOCKET_IDLE_TIMEOUT}s)")
+                print(
+                    f"⚠️  WARNING: Socket was idle for {idle_time:.1f}s (timeout: {SOCKET_IDLE_TIMEOUT}s)"
+                )
 
         self.last_activity_time = current_time
 
@@ -184,7 +194,9 @@ class IntesisBoxEmulator(asyncio.Protocol):
                         if function == FUNCTION_ONOFF:
                             delay = random.uniform(RESPONSE_DELAY_MIN, ONOFF_DELAY_MAX)
                         else:
-                            delay = random.uniform(RESPONSE_DELAY_MIN, RESPONSE_DELAY_MAX)
+                            delay = random.uniform(
+                                RESPONSE_DELAY_MIN, RESPONSE_DELAY_MAX
+                            )
 
                         chn_msg = f"CHN,{acNum}:{function},{value}"
                         chn_responses.append((delay, chn_msg, function))
@@ -213,7 +225,9 @@ class IntesisBoxEmulator(asyncio.Protocol):
                 elif limit == "SETPTEMP":
                     if self.dynamic_setptemp:
                         # Get current MODE from device state
-                        current_mode = self.devices.get("1", {}).get(FUNCTION_MODE, "AUTO")
+                        current_mode = self.devices.get("1", {}).get(
+                            FUNCTION_MODE, "AUTO"
+                        )
                         if current_mode == MODE_AUTO:
                             immediate_response = f"LIMITS:SETPTEMP,[{SETPTEMP_AUTO_MIN},{SETPTEMP_AUTO_MAX}]"
                         elif current_mode == MODE_HEAT:
@@ -255,13 +269,17 @@ class IntesisBoxEmulator(asyncio.Protocol):
         print(f"  → {message} (delayed {delay:.3f}s, function: {function})")
 
 
-async def main(host, port, vaneud_limits, vanelr_limits, fansp_limits, dynamic_setptemp):
+async def main(
+    host, port, vaneud_limits, vanelr_limits, fansp_limits, dynamic_setptemp
+):
     """Set up and run the emulator."""
     loop = asyncio.get_running_loop()
 
     # Create a factory function that passes the limits
     def protocol_factory():
-        return IntesisBoxEmulator(vaneud_limits, vanelr_limits, fansp_limits, dynamic_setptemp)
+        return IntesisBoxEmulator(
+            vaneud_limits, vanelr_limits, fansp_limits, dynamic_setptemp
+        )
 
     server = await loop.create_server(protocol_factory, host, port)
     print("=" * 70)
@@ -270,7 +288,7 @@ async def main(host, port, vaneud_limits, vanelr_limits, fansp_limits, dynamic_s
     print(f"VANELR limits: {vanelr_limits if vanelr_limits else 'Disabled'}")
     print(f"FANSP limits:  {fansp_limits if fansp_limits else 'Disabled'}")
     if dynamic_setptemp:
-        print(f"SETPTEMP: Dynamic by MODE")
+        print("SETPTEMP: Dynamic by MODE")
         print(f"  AUTO: [{SETPTEMP_AUTO_MIN},{SETPTEMP_AUTO_MAX}]")
         print(f"  HEAT: [{SETPTEMP_HEAT_MIN},{SETPTEMP_HEAT_MAX}]")
         print(f"  COOL: [{SETPTEMP_COOL_MIN},{SETPTEMP_COOL_MAX}]")
@@ -297,8 +315,7 @@ async def main(host, port, vaneud_limits, vanelr_limits, fansp_limits, dynamic_s
 
 
 def parse_compact_notation(notation, allow_swing=True):
-    """
-    Parse compact notation into a list of options.
+    """Parse compact notation into a list of options.
 
     Format: [A][X][S]
     - A = includes AUTO
@@ -311,6 +328,7 @@ def parse_compact_notation(notation, allow_swing=True):
     - "4" -> ["1", "2", "3", "4"]
     - "N" -> None
     - "A3" -> ["AUTO", "1", "2", "3"]
+
     """
     if not notation or notation.upper() == "N":
         return None
@@ -335,13 +353,17 @@ def parse_compact_notation(notation, allow_swing=True):
         try:
             num_positions = int(notation)
             if num_positions < 1 or num_positions > 9:
-                raise ValueError(f"Number of positions must be 1-9, got {num_positions}")
+                raise ValueError(
+                    f"Number of positions must be 1-9, got {num_positions}"
+                )
 
             # Add numbered positions
             options.extend([str(i) for i in range(1, num_positions + 1)])
         except ValueError as e:
             if "invalid literal" in str(e):
-                raise ValueError(f"Invalid notation format. Expected format: [A][1-9][S]")
+                raise ValueError(
+                    "Invalid notation format. Expected format: [A][1-9][S]"
+                )
             raise
 
     # Add SWING at the end if specified
@@ -384,54 +406,47 @@ Examples:
 
   python IntesisBoxEmulator.py --VUD N --VLR N --FAN N
     All limits disabled (LIMITS queries are ignored, no response sent)
-        """
+        """,
     )
 
     # Add help arguments (both --help and --?)
     parser.add_argument(
-        '-h', '--help', '--?',
-        action='help',
-        help='Show this help message and exit'
+        "-h", "--help", "--?", action="help", help="Show this help message and exit"
     )
 
     parser.add_argument(
         "--VUD",
         dest="vaneud",
         help="Vertical vane (up/down). Format: [A][1-9][S]. Examples: A7S, 3S, 4, N. Default: A3",
-        default="A3"
+        default="A3",
     )
 
     parser.add_argument(
         "--VLR",
         dest="vanelr",
         help="Horizontal vane (left/right). Format: [A][1-9][S]. Examples: A5S, 3S, 4, N. Default: A3",
-        default="A3"
+        default="A3",
     )
 
     parser.add_argument(
         "--FAN",
         dest="fansp",
         help="Fan speed. Format: [A][1-9]. Examples: A4, 5, N. Default: A3",
-        default="A3"
+        default="A3",
     )
 
     parser.add_argument(
-        "--host",
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)"
+        "--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)"
     )
 
     parser.add_argument(
-        "--port",
-        type=int,
-        default=3310,
-        help="Port to listen on (default: 3310)"
+        "--port", type=int, default=3310, help="Port to listen on (default: 3310)"
     )
 
     parser.add_argument(
         "--dynamic-setptemp",
         action="store_true",
-        help="Enable dynamic SETPTEMP limits based on MODE (AUTO: [180,300], HEAT: [200,300], COOL: [180,250], DRY: [180,250], FAN: [180,300])"
+        help="Enable dynamic SETPTEMP limits based on MODE (AUTO: [180,300], HEAT: [200,300], COOL: [180,250], DRY: [180,250], FAN: [180,300])",
     )
 
     args = parser.parse_args()
@@ -444,4 +459,13 @@ Examples:
     except ValueError as e:
         parser.error(str(e))
 
-    asyncio.run(main(args.host, args.port, vaneud_limits, vanelr_limits, fansp_limits, args.dynamic_setptemp))
+    asyncio.run(
+        main(
+            args.host,
+            args.port,
+            vaneud_limits,
+            vanelr_limits,
+            fansp_limits,
+            args.dynamic_setptemp,
+        )
+    )
