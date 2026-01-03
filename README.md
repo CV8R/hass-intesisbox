@@ -83,6 +83,14 @@ Enables dynamic temperature limits based on current MODE
 
 Default: Disabled (static limits [180,300])
 
+### Support setting and tracking time
+
+- **CFG:DATETIME** - Get current internal date and time
+  - Format: `CFG:DATETIME,DD/MM/YYYY HH:MM:SS`
+  - Example response: `CFG:DATETIME,31/12/2001 19:18:31`
+- **CFG:DATETIME,DD/MM/YYYY HH:MM:SS** - Set internal date and time
+  - Example: `CFG:DATETIME,31/12/2025 23:59:50`
+  - Response: `ACK` (or `ERR` if format invalid)
 
 ## Credits
 

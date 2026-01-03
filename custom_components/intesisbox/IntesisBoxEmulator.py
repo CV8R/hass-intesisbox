@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+from datetime import datetime, timedelta
 import random
 import time
 
@@ -22,7 +23,7 @@ SETPTEMP_HEAT_MAX = 300
 SETPTEMP_COOL_MIN = 180
 SETPTEMP_COOL_MAX = 250
 SETPTEMP_DRY_MIN = 180
-SETPTEMP_DRY_MAX = 300
+SETPTEMP_DRY_MAX = 250
 SETPTEMP_FAN_MIN = 180
 SETPTEMP_FAN_MAX = 300
 
@@ -60,6 +61,11 @@ class IntesisBoxEmulator(asyncio.Protocol):
 
     # Class variable to store persistent device state across connections
     _device_state = None
+
+    # Internal clock - starts at 1 Jan 2001 00:00:00
+    _internal_datetime = None  # Stored as datetime object
+    _internal_clock_start = None  # Real time (monotonic) when internal clock was set
+    _clock_initialized = False
 
     def __init__(
         self,
@@ -103,6 +109,13 @@ class IntesisBoxEmulator(asyncio.Protocol):
             }
             print("✓ Initialized device state (ONOFF=OFF)")
 
+        # Initialize internal clock only once (persistent across connections)
+        if not IntesisBoxEmulator._clock_initialized:
+            IntesisBoxEmulator._internal_datetime = datetime(2001, 1, 1, 0, 0, 0)
+            IntesisBoxEmulator._internal_clock_start = time.monotonic()
+            IntesisBoxEmulator._clock_initialized = True
+            print("✓ Initialized internal clock (01/01/2001 00:00:00)")
+
         # Reference the shared state
         self.devices = IntesisBoxEmulator._device_state
 
@@ -125,6 +138,25 @@ class IntesisBoxEmulator(asyncio.Protocol):
                 )
 
         print(f"✓ Connection established from {peername}")
+
+    @classmethod
+    def get_internal_datetime(cls):
+        """Get current internal datetime based on elapsed time since clock was set."""
+        if cls._internal_datetime is None or cls._internal_clock_start is None:
+            # Fallback to default if not initialized
+            return datetime(2001, 1, 1, 0, 0, 0)
+
+        # Calculate elapsed time since clock was set
+        elapsed_seconds = time.monotonic() - cls._internal_clock_start
+
+        # Add elapsed time to stored datetime
+        return cls._internal_datetime + timedelta(seconds=elapsed_seconds)
+
+    @classmethod
+    def set_internal_datetime(cls, new_datetime):
+        """Set the internal clock to a new datetime."""
+        cls._internal_datetime = new_datetime
+        cls._internal_clock_start = time.monotonic()
 
     def connection_lost(self, exc):
         """Track disconnection time."""
@@ -246,6 +278,33 @@ class IntesisBoxEmulator(asyncio.Protocol):
                         immediate_response = f"LIMITS:SETPTEMP,[{SETPTEMP_DEFAULT_MIN},{SETPTEMP_DEFAULT_MAX}]"
                 elif limit == "MODE":
                     immediate_response = "LIMITS:MODE,[AUTO,HEAT,DRY,COOL,FAN]"
+
+            elif request[0].split(":")[0] == "CFG":
+                if len(request[0].split(":")) > 1:
+                    config_item = request[0].split(":")[1]
+                    if config_item == "DATETIME":
+                        # Check if this is a SET (has value) or GET (no value)
+                        if len(request) > 1:
+                            # SET: CFG:DATETIME,DD/MM/YYYY HH:MM:SS
+                            try:
+                                datetime_str = request[1]
+                                # Parse the datetime string
+                                new_dt = datetime.strptime(
+                                    datetime_str, "%d/%m/%Y %H:%M:%S"
+                                )
+                                # Set the internal clock
+                                IntesisBoxEmulator.set_internal_datetime(new_dt)
+                                immediate_response = "ACK"
+                                print(f"⏰ Internal clock set to: {datetime_str}")
+                            except ValueError:
+                                immediate_response = "ERR"
+                                print(f"⚠️  Invalid datetime format: {request[1]}")
+                        else:
+                            # GET: CFG:DATETIME
+                            # Return current internal datetime in DD/MM/YYYY HH:MM:SS format
+                            current_dt = IntesisBoxEmulator.get_internal_datetime()
+                            datetime_str = current_dt.strftime("%d/%m/%Y %H:%M:%S")
+                            immediate_response = f"CFG:DATETIME,{datetime_str}"
 
             # Send immediate response
             if immediate_response:
