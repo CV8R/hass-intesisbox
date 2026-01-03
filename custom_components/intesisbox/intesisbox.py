@@ -276,6 +276,23 @@ class IntesisBox(asyncio.Protocol):
         if function == FUNCTION_AMBTEMP:
             self._last_ambtemp_time = asyncio.get_event_loop().time()
 
+        # Check if MODE is changing (after initial setup)
+        # Some devices have different temperature limits for different modes
+        if function == FUNCTION_MODE and FUNCTION_MODE in self._device:
+            old_mode = self._device.get(FUNCTION_MODE)
+            if old_mode != value and value is not None:
+                _LOGGER.info(
+                    "%s Mode changed from %s to %s, re-querying temperature limits",
+                    self._log_prefix,
+                    old_mode,
+                    value,
+                )
+                # Query temperature limits after mode change
+                # Some devices have different min/max temps for different modes
+                self._schedule_task(
+                    self._write_async("LIMITS:SETPTEMP", delay=COMMAND_DELAY)
+                )
+
         self._device[function] = value  # type: ignore[assignment]
         _LOGGER.debug("%s Updated state: %r", self._log_prefix, self._device)
 
