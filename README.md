@@ -75,6 +75,15 @@ Pattern: `[A][X][S]`
 * S = includes SWING (vanes only, not for fan)
 * N = disabled (LIMITS queries are ignored, no response sent)
 
+### Allow dynamic min max temp limits per mode
+
+--dynamic-setptemp
+
+Enables dynamic temperature limits based on current MODE
+
+Default: Disabled (static limits [180,300])
+
+
 ## Credits
 
 Original: [@jnimmo](https://github.com/jnimmo)
