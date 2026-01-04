@@ -34,6 +34,7 @@ FUNCTION_VANELR = "VANELR"
 FUNCTION_AMBTEMP = "AMBTEMP"
 FUNCTION_ERRSTATUS = "ERRSTATUS"
 FUNCTION_ERRCODE = "ERRCODE"
+FUNCTION_DATETIME = "DATETIME"
 
 # Null/invalid values returned by the device
 NULL_VALUES = ["-32768", "32768"]
@@ -91,6 +92,9 @@ class IntesisBox(asyncio.Protocol):
         self._horizontal_vane_list: list[str] = []
         self._setpoint_minimum: float | None = None
         self._setpoint_maximum: float | None = None
+
+        # Device datetime
+        self._device_datetime: str | None = None
 
         # Command retry tracking
         self._command_retry_counts: dict[str, int] = {}
@@ -242,6 +246,8 @@ class IntesisBox(asyncio.Protocol):
             elif cmd == "LIMITS":
                 self._parse_limits_received(args)
                 status_changed = True
+            elif cmd == "CFG":
+                self._parse_cfg_received(args)
 
         if status_changed:
             self._send_update_callback()
@@ -338,6 +344,27 @@ class IntesisBox(asyncio.Protocol):
             self._vertical_vane_list = values
         elif function == FUNCTION_VANELR:
             self._horizontal_vane_list = values
+
+    def _parse_cfg_received(self, args: str) -> None:
+        """Parse CFG responses (currently only DATETIME)."""
+        split_args = args.split(",", 1)
+
+        if len(split_args) < 1:
+            _LOGGER.warning("%s Invalid CFG format: %s", self._log_prefix, args)
+            return
+
+        function = split_args[0]
+
+        if function == FUNCTION_DATETIME:
+            if len(split_args) == 2:
+                # CFG:DATETIME,DD/MM/YYYY HH:MM:SS response
+                datetime_value = split_args[1]
+                self._device_datetime = datetime_value
+                _LOGGER.info("%s Device datetime: %s", self._log_prefix, datetime_value)
+            else:
+                _LOGGER.warning(
+                    "%s CFG:DATETIME response missing datetime value", self._log_prefix
+                )
             _LOGGER.info(
                 "%s Horizontal vane list populated: %s",
                 self._log_prefix,
@@ -623,6 +650,26 @@ class IntesisBox(asyncio.Protocol):
         """Turn on the device."""
         self._schedule_task(self._set_value_async(FUNCTION_ONOFF, POWER_ON))
 
+    def query_datetime(self) -> None:
+        """Query the device's current datetime (non-blocking)."""
+        self._schedule_task(
+            self._write_async("CFG:DATETIME", delay=INTER_COMMAND_DELAY)
+        )
+
+    async def set_datetime_async(self, datetime_str: str) -> None:
+        """Set the device's datetime.
+
+        Args:
+            datetime_str: DateTime in format "DD/MM/YYYY HH:MM:SS"
+
+        """
+        _LOGGER.debug(
+            "%s Setting device datetime to: %s", self._log_prefix, datetime_str
+        )
+        await self._write_async(
+            f"CFG:DATETIME,{datetime_str}", delay=INTER_COMMAND_DELAY
+        )
+
     # Properties
     @property
     def _log_prefix(self) -> str:
@@ -680,6 +727,11 @@ class IntesisBox(asyncio.Protocol):
     def firmware_version(self) -> str | None:
         """Firmware version of the IntesisBox."""
         return self._firmversion
+
+    @property
+    def device_datetime(self) -> str | None:
+        """Device datetime (format: DD/MM/YYYY HH:MM:SS)."""
+        return self._device_datetime
 
     @property
     def is_on(self) -> bool:

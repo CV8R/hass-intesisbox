@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timezone
 import logging
 
 from homeassistant.config_entries import ConfigEntry  # type: ignore
 from homeassistant.const import CONF_HOST, Platform  # type: ignore
 from homeassistant.core import HomeAssistant  # type: ignore
 
-from .const import DOMAIN
+from .const import (
+    CONF_SYNC_TIME,
+    CONF_USE_LOCAL_TIME,
+    DEFAULT_SYNC_TIME,
+    DEFAULT_USE_LOCAL_TIME,
+    DOMAIN,
+)
 from .intesisbox import IntesisBox
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,6 +63,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     len(controller.vane_vertical_list),
                     len(controller.vane_horizontal_list),
                 )
+
+                # Query device datetime (always done, just for logging)
+                _LOGGER.debug("%s Querying device datetime", log_prefix)
+                controller.query_datetime()
+                await asyncio.sleep(0.5)  # Give device time to respond
+
+                # Check if we should sync time
+                sync_time = entry.data.get(CONF_SYNC_TIME, DEFAULT_SYNC_TIME)
+                if sync_time:
+                    use_local_time = entry.data.get(
+                        CONF_USE_LOCAL_TIME, DEFAULT_USE_LOCAL_TIME
+                    )
+
+                    # Get current time
+                    if use_local_time:
+                        now = datetime.now()
+                        time_type = "local"
+                    else:
+                        now = datetime.now(UTC)
+                        time_type = "UTC"
+
+                    # Format as DD/MM/YYYY HH:MM:SS
+                    datetime_str = now.strftime("%d/%m/%Y %H:%M:%S")
+
+                    _LOGGER.info(
+                        "%s Setting device time to %s (%s)",
+                        log_prefix,
+                        datetime_str,
+                        time_type,
+                    )
+                    await controller.set_datetime_async(datetime_str)
+                    await asyncio.sleep(0.5)  # Give device time to process
+
+                    # Query again to confirm
+                    controller.query_datetime()
+                    await asyncio.sleep(0.5)
+
                 break
         await asyncio.sleep(0.1)
     else:

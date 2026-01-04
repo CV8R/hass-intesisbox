@@ -24,6 +24,8 @@ from .const import (
     CONF_FAN_MODE_8,
     CONF_FAN_MODE_9,
     CONF_FAN_MODE_AUTO,
+    CONF_SYNC_TIME,
+    CONF_USE_LOCAL_TIME,
     CONF_VANE_HORIZONTAL_1,
     CONF_VANE_HORIZONTAL_2,
     CONF_VANE_HORIZONTAL_3,
@@ -48,6 +50,8 @@ from .const import (
     CONF_VANE_VERTICAL_SWING,
     DEFAULT_FAN_MODES,
     DEFAULT_NAME,
+    DEFAULT_SYNC_TIME,
+    DEFAULT_USE_LOCAL_TIME,
     DEFAULT_VANE_HORIZONTAL_MODES,
     DEFAULT_VANE_VERTICAL_MODES,
     DOMAIN,
@@ -148,6 +152,8 @@ class IntesisBoxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                         "fan_modes": DEFAULT_FAN_MODES,
                         "vane_vertical_modes": DEFAULT_VANE_VERTICAL_MODES,
                         "vane_horizontal_modes": DEFAULT_VANE_HORIZONTAL_MODES,
+                        CONF_SYNC_TIME: DEFAULT_SYNC_TIME,
+                        CONF_USE_LOCAL_TIME: DEFAULT_USE_LOCAL_TIME,
                     },
                 )
 
@@ -206,6 +212,12 @@ class IntesisBoxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                     "vane_horizontal_modes": import_config.get(
                         "vane_horizontal_modes", DEFAULT_VANE_HORIZONTAL_MODES
                     ),
+                    CONF_SYNC_TIME: import_config.get(
+                        CONF_SYNC_TIME, DEFAULT_SYNC_TIME
+                    ),
+                    CONF_USE_LOCAL_TIME: import_config.get(
+                        CONF_USE_LOCAL_TIME, DEFAULT_USE_LOCAL_TIME
+                    ),
                 },
             )
 
@@ -248,7 +260,7 @@ class IntesisBoxOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="device_not_ready")
 
         # Build menu options based on what device supports
-        menu_options = ["fan_modes"]
+        menu_options = ["datetime_sync", "fan_modes"]
         if self._vane_vertical:
             menu_options.append("vane_vertical")
         if self._vane_horizontal:
@@ -480,4 +492,48 @@ class IntesisBoxOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "vane_horizontal": ", ".join(self._vane_horizontal),
             },
+        )
+
+    async def async_step_datetime_sync(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure datetime synchronization settings."""
+        if user_input is not None:
+            # Update config entry with datetime sync settings
+            self.hass.config_entries.async_update_entry(
+                self._config_entry,
+                data={
+                    **self._config_entry.data,
+                    CONF_SYNC_TIME: user_input.get(CONF_SYNC_TIME, DEFAULT_SYNC_TIME),
+                    CONF_USE_LOCAL_TIME: user_input.get(
+                        CONF_USE_LOCAL_TIME, DEFAULT_USE_LOCAL_TIME
+                    ),
+                },
+            )
+
+            # Return to menu
+            return await self.async_step_init()
+
+        # Get current settings
+        current_sync_time = self._config_entry.data.get(
+            CONF_SYNC_TIME, DEFAULT_SYNC_TIME
+        )
+        current_use_local_time = self._config_entry.data.get(
+            CONF_USE_LOCAL_TIME, DEFAULT_USE_LOCAL_TIME
+        )
+
+        return self.async_show_form(
+            step_id="datetime_sync",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SYNC_TIME,
+                        default=current_sync_time,
+                    ): bool,
+                    vol.Optional(
+                        CONF_USE_LOCAL_TIME,
+                        default=current_use_local_time,
+                    ): bool,
+                }
+            ),
         )

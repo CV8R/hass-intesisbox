@@ -86,3 +86,11 @@ DEFAULT_VANE_HORIZONTAL_MODES = {
     "9": "9",
     "SWING": "swing",
 }
+
+# DateTime configuration keys
+CONF_SYNC_TIME = "sync_time"
+CONF_USE_LOCAL_TIME = "use_local_time"
+
+# Default DateTime configuration
+DEFAULT_SYNC_TIME = False
+DEFAULT_USE_LOCAL_TIME = True

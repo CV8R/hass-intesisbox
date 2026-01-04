@@ -24,6 +24,7 @@
     "step": {
       "init": {
         "menu_options": {
+          "datetime_sync": "Configure Device Time Synchronization",
           "fan_modes": "Configure Fan Mode Names",
           "vane_vertical": "Configure Vertical Vane Position Names",
           "vane_horizontal": "Configure Horizontal Vane Position Names"
@@ -115,6 +116,18 @@
           "vane_horizontal_8": "Name for horizontal vane position 8",
           "vane_horizontal_9": "Name for horizontal vane position 9",
           "vane_horizontal_swing": "Name for horizontal vane swing mode"
+        }
+      },
+      "datetime_sync": {
+        "title": "Device Time Synchronization",
+        "description": "**Device Time Synchronization**\n\nConfigure whether to synchronize the device's internal clock with Home Assistant on startup.\n\n**Sync Time on Startup**: When enabled, the device time will be set when the integration loads.\n\n**Use Local Time**: When enabled, sets the device to your local time. When disabled, sets the device to UTC time.",
+        "data": {
+          "sync_time": "Sync Time on Startup",
+          "use_local_time": "Use Local Time"
+        },
+        "data_description": {
+          "sync_time": "Enable to set device time on integration startup",
+          "use_local_time": "Enable for local time, disable for UTC time"
         }
       }
     }
