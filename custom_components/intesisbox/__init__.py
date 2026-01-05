@@ -30,7 +30,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     name = entry.title
 
-    _LOGGER.info("[%s] Setting up Intesis Gateway integration for %s", name, host)
+    log_prefix = f"[{name} ({host})]"
+    _LOGGER.info("%s Setting up Intesis Gateway integration", log_prefix)
 
     # Ensure DOMAIN exists in hass.data
     hass.data.setdefault(DOMAIN, {})
@@ -39,8 +40,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     existing_controller = hass.data[DOMAIN].get(entry.entry_id)
     if existing_controller:
         _LOGGER.warning(
-            "[%s] Found existing controller for entry, cleaning up before creating new one",
-            name,
+            "%s Found existing controller, cleaning up before creating new one",
+            log_prefix,
         )
         existing_controller.stop()
         await existing_controller.wait_for_disconnect(timeout=2.0)
@@ -50,11 +51,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     controller = IntesisBox(host, loop=hass.loop, name=name)
 
     # Connect to device (this is synchronous but schedules async work)
-    _LOGGER.debug("[%s] Calling controller.connect()", name)
+    _LOGGER.debug("%s Calling controller.connect()", log_prefix)
     controller.connect()
 
     # Wait for the connection to be established and initialized
-    _LOGGER.debug("[%s] Waiting for connection and initialization...", name)
+    _LOGGER.debug("%s Waiting for connection and initialization...", log_prefix)
     for i in range(150):  # Wait up to 15 seconds for all limits including vanes
         if controller.is_connected and len(controller.operation_list) > 0:
             # Core initialization is done (have connection and operation modes)
@@ -119,9 +120,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         # Timeout - device not responding
         _LOGGER.warning(
-            "[%s] Initialization timeout after 15 seconds - device at %s not responding. Will retry automatically.",
-            name,
-            host,
+            "%s Initialization timeout after 15 seconds - device not responding. Will retry automatically.",
+            log_prefix,
         )
 
         # Clean up failed connection
@@ -145,11 +145,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    _LOGGER.info(
-        "[%s] Unloading Intesis Gateway integration for %s",
-        entry.title,
-        entry.data[CONF_HOST],
-    )
+    log_prefix = f"[{entry.title} ({entry.data[CONF_HOST]})]"
+    _LOGGER.info("%s Unloading Intesis Gateway integration", log_prefix)
 
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -158,21 +155,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Stop and remove controller
         controller = hass.data[DOMAIN].pop(entry.entry_id, None)
         if controller:
-            _LOGGER.debug("[%s] Stopping controller", entry.title)
+            _LOGGER.debug("%s Stopping controller", log_prefix)
             controller.stop()
             # Wait for connection to ACTUALLY close (not just initiated)
             disconnect_ok = await controller.wait_for_disconnect(timeout=5.0)
             if disconnect_ok:
                 # Connection closed successfully, now enforce protocol minimum delay
                 _LOGGER.debug(
-                    "[%s] Connection closed, waiting protocol minimum delay",
-                    entry.title,
+                    "%s Connection closed, waiting protocol minimum delay", log_prefix
                 )
                 await asyncio.sleep(1.0)
             else:
                 # Timeout waiting for disconnect, use longer delay to be safe
                 _LOGGER.warning(
-                    "[%s] Disconnect timeout, using extended delay", entry.title
+                    "%s Disconnect timeout, using extended delay", log_prefix
                 )
                 await asyncio.sleep(3.0)
 

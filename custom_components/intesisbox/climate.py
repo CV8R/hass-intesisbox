@@ -543,9 +543,9 @@ class IntesisBoxAC(ClimateEntity):
         if self._connected != self._controller.is_connected:
             self._connected = self._controller.is_connected
             if self._connected:
-                _LOGGER.info("Connection to Intesis Gateway was restored")
+                _LOGGER.info("%s Connection was restored", self._log_prefix)
             else:
-                _LOGGER.warning("Lost connection to Intesis Gateway")
+                _LOGGER.warning("%s Lost connection", self._log_prefix)
                 # Set reconnect timer so first attempt happens after INITIAL_RECONNECT_DELAY
                 self._last_reconnect_attempt = (
                     time.time() - RECONNECT_INTERVAL + INITIAL_RECONNECT_DELAY
@@ -564,14 +564,16 @@ class IntesisBoxAC(ClimateEntity):
             now = time.time()
             if now - self._last_reconnect_attempt < RECONNECT_INTERVAL:
                 _LOGGER.debug(
-                    "Skipping reconnect attempt, last attempt was %.1f seconds ago",
+                    "%s Skipping reconnect attempt, last attempt was %.1f seconds ago",
+                    self._log_prefix,
                     now - self._last_reconnect_attempt,
                 )
                 return
 
             self._last_reconnect_attempt = now
             _LOGGER.info(
-                "Attempting to reconnect to Intesis Gateway (attempt #%d)",
+                "%s Attempting to reconnect (attempt #%d)",
+                self._log_prefix,
                 self._connection_retries + 1,
             )
 
@@ -592,7 +594,9 @@ class IntesisBoxAC(ClimateEntity):
                         self.hass, RECONNECT_INTERVAL + 1, schedule_next_attempt
                     )
             except Exception as err:
-                _LOGGER.error("Reconnection attempt failed: %s", err)
+                _LOGGER.error(
+                    "%s Reconnection attempt failed: %s", self._log_prefix, err
+                )
 
                 # Schedule next reconnect attempt
                 async def schedule_retry(_now):
@@ -603,7 +607,7 @@ class IntesisBoxAC(ClimateEntity):
         else:
             # Reset retry counter when connected
             if self._connection_retries > 0:
-                _LOGGER.info("Successfully reconnected to Intesis Gateway")
+                _LOGGER.info("%s Successfully reconnected", self._log_prefix)
                 self._connection_retries = 0
 
         # Update all state from controller
@@ -650,12 +654,14 @@ class IntesisBoxAC(ClimateEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         """Shutdown the controller when the device is being removed."""
-        _LOGGER.debug("Climate entity being removed, stopping controller")
+        _LOGGER.debug(
+            "%s Climate entity being removed, stopping controller", self._log_prefix
+        )
         self._is_removing = True
         try:
             await self.hass.async_add_executor_job(self._controller.stop)
         except Exception as err:
-            _LOGGER.error("Error stopping controller: %s", err)
+            _LOGGER.error("%s Error stopping controller: %s", self._log_prefix, err)
 
     @property
     def icon(self) -> str | None:
