@@ -11,7 +11,7 @@ import voluptuous as vol  # type: ignore
 from homeassistant import config_entries  # type: ignore
 from homeassistant.const import CONF_HOST, CONF_NAME  # type: ignore
 from homeassistant.core import HomeAssistant, callback  # type: ignore
-from homeassistant.data_entry_flow import FlowResult  # type: ignore
+from homeassistant.data_entry_flow import AbortFlow, FlowResult  # type: ignore
 
 from .const import (
     CONF_FAN_MODE_1,
@@ -85,6 +85,10 @@ async def validate_connection(hass: HomeAssistant, host: str) -> dict[str, Any]:
 
                 # Stop the controller - we'll create a new one in async_setup_entry
                 controller.stop()
+                # Wait for complete disconnect to prevent ghost connections
+                await controller.wait_for_disconnect(timeout=3.0)
+                # Additional delay to ensure socket is fully closed
+                await asyncio.sleep(1.0)
 
                 return {
                     "mac": mac,
@@ -96,12 +100,16 @@ async def validate_connection(hass: HomeAssistant, host: str) -> dict[str, Any]:
             await asyncio.sleep(0.1)
 
         controller.stop()
+        await controller.wait_for_disconnect(timeout=3.0)
+        await asyncio.sleep(1.0)
         raise ConnectionError("Connection timeout")
 
     except Exception as err:
         _LOGGER.error("Failed to connect to Intesis Gateway at %s: %s", host, err)
         if controller:
             controller.stop()
+            await controller.wait_for_disconnect(timeout=3.0)
+            await asyncio.sleep(1.0)
         raise
 
 
@@ -157,6 +165,9 @@ class IntesisBoxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                     },
                 )
 
+            except AbortFlow:
+                # Let AbortFlow exceptions propagate to Home Assistant's flow handler
+                raise
             except ConnectionError:
                 errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except

@@ -9,6 +9,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry  # type: ignore
 from homeassistant.const import CONF_HOST, Platform  # type: ignore
 from homeassistant.core import HomeAssistant  # type: ignore
+from homeassistant.exceptions import ConfigEntryNotReady  # type: ignore
 
 from .const import (
     CONF_SYNC_TIME,
@@ -29,21 +30,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     name = entry.title
 
-    _LOGGER.info("Setting up Intesis Gateway integration for %s", host)
+    _LOGGER.info("[%s] Setting up Intesis Gateway integration for %s", name, host)
+
+    # Ensure DOMAIN exists in hass.data
+    hass.data.setdefault(DOMAIN, {})
+
+    # Check if there's already a controller for this entry (shouldn't happen but be safe)
+    existing_controller = hass.data[DOMAIN].get(entry.entry_id)
+    if existing_controller:
+        _LOGGER.warning(
+            "[%s] Found existing controller for entry, cleaning up before creating new one",
+            name,
+        )
+        existing_controller.stop()
+        await existing_controller.wait_for_disconnect(timeout=2.0)
+        hass.data[DOMAIN].pop(entry.entry_id, None)
 
     # Create controller
     controller = IntesisBox(host, loop=hass.loop, name=name)
 
-    # Store controller first
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = controller
-
     # Connect to device (this is synchronous but schedules async work)
-    _LOGGER.debug("Calling controller.connect()")
+    _LOGGER.debug("[%s] Calling controller.connect()", name)
     controller.connect()
 
     # Wait for the connection to be established and initialized
-    _LOGGER.debug("Waiting for connection and initialization...")
+    _LOGGER.debug("[%s] Waiting for connection and initialization...", name)
     for i in range(150):  # Wait up to 15 seconds for all limits including vanes
         if controller.is_connected and len(controller.operation_list) > 0:
             # Core initialization is done (have connection and operation modes)
@@ -54,7 +65,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     entity_id = f"climate.{controller.device_mac_address.lower()}"
                     log_prefix = f"[{name}({entity_id})]"
                 else:
-                    log_prefix = f"[{host}]"
+                    log_prefix = f"[{name}({host})]"
 
                 _LOGGER.info(
                     "%s Intesis Gateway initialized (fans: %d, vanes: v=%d h=%d)",
@@ -100,12 +111,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     controller.query_datetime()
                     await asyncio.sleep(0.5)
 
+                # SUCCESS - Store controller ONLY after successful initialization
+                hass.data[DOMAIN][entry.entry_id] = controller
+
                 break
         await asyncio.sleep(0.1)
     else:
+        # Timeout - device not responding
         _LOGGER.warning(
-            "Initialization timeout after 15 seconds (device may still be initializing)"
+            "[%s] Initialization timeout after 15 seconds - device at %s not responding. Will retry automatically.",
+            name,
+            host,
         )
+
+        # Clean up failed connection
+        controller.stop()
+        await controller.wait_for_disconnect(timeout=5.0)
+
+        # Make absolutely sure nothing is stored
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+
+        # Raise ConfigEntryNotReady to trigger HA's automatic retry
+        raise ConfigEntryNotReady(f"Device at {host} not available")
 
     # Forward entry setup to climate platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -118,7 +145,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    _LOGGER.info("Unloading Intesis Gateway integration for %s", entry.data[CONF_HOST])
+    _LOGGER.info(
+        "[%s] Unloading Intesis Gateway integration for %s",
+        entry.title,
+        entry.data[CONF_HOST],
+    )
 
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -127,17 +158,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Stop and remove controller
         controller = hass.data[DOMAIN].pop(entry.entry_id, None)
         if controller:
-            _LOGGER.debug("Stopping controller")
+            _LOGGER.debug("[%s] Stopping controller", entry.title)
             controller.stop()
             # Wait for connection to ACTUALLY close (not just initiated)
             disconnect_ok = await controller.wait_for_disconnect(timeout=5.0)
             if disconnect_ok:
                 # Connection closed successfully, now enforce protocol minimum delay
-                _LOGGER.debug("Connection closed, waiting protocol minimum delay")
+                _LOGGER.debug(
+                    "[%s] Connection closed, waiting protocol minimum delay",
+                    entry.title,
+                )
                 await asyncio.sleep(1.0)
             else:
                 # Timeout waiting for disconnect, use longer delay to be safe
-                _LOGGER.warning("Disconnect timeout, using extended delay")
+                _LOGGER.warning(
+                    "[%s] Disconnect timeout, using extended delay", entry.title
+                )
                 await asyncio.sleep(3.0)
 
     return unload_ok

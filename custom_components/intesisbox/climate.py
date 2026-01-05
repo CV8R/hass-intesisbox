@@ -125,7 +125,8 @@ async def async_setup_entry(
     vane_horizontal_modes = entry.data.get(
         "vane_horizontal_modes", DEFAULT_VANE_HORIZONTAL_MODES
     )
-    name = entry.data.get(CONF_NAME, DEFAULT_NAME)
+    # Use entry title (device name) for the entity's friendly name
+    name = entry.title
 
     async_add_entities(
         [
@@ -157,6 +158,10 @@ class IntesisBoxAC(ClimateEntity):
         self._deviceid = controller.device_mac_address
         self._attr_name = name or controller.device_mac_address
         self._attr_unique_id = controller.device_mac_address
+        # Set entity_id explicitly based on MAC address
+        # This prevents entity_id from changing when device is renamed
+        if controller.device_mac_address:
+            self.entity_id = f"climate.{controller.device_mac_address.lower()}"
         self._connected = controller.is_connected
 
         _LOGGER.debug("%s Setting up climate device", self._log_prefix)
