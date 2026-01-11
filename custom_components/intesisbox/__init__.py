@@ -12,8 +12,10 @@ from homeassistant.core import HomeAssistant  # type: ignore
 from homeassistant.exceptions import ConfigEntryNotReady  # type: ignore
 
 from .const import (
+    CONF_ENABLE_PING,
     CONF_SYNC_TIME,
     CONF_USE_LOCAL_TIME,
+    DEFAULT_ENABLE_PING,
     DEFAULT_SYNC_TIME,
     DEFAULT_USE_LOCAL_TIME,
     DOMAIN,
@@ -48,7 +50,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
     # Create controller
-    controller = IntesisBox(host, loop=hass.loop, name=name)
+    enable_ping = entry.data.get(CONF_ENABLE_PING, DEFAULT_ENABLE_PING)
+    controller = IntesisBox(host, loop=hass.loop, name=name, enable_ping=enable_ping)
 
     # Connect to device (this is synchronous but schedules async work)
     _LOGGER.debug("%s Calling controller.connect()", log_prefix)

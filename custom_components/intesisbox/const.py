@@ -91,6 +91,12 @@ DEFAULT_VANE_HORIZONTAL_MODES = {
 CONF_SYNC_TIME = "sync_time"
 CONF_USE_LOCAL_TIME = "use_local_time"
 
+# WMP Protocol configuration keys
+CONF_ENABLE_PING = "enable_ping"
+
 # Default DateTime configuration
 DEFAULT_SYNC_TIME = False
 DEFAULT_USE_LOCAL_TIME = True
+
+# Default WMP Protocol configuration
+DEFAULT_ENABLE_PING = False

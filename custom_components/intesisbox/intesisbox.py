@@ -60,11 +60,13 @@ class IntesisBox(asyncio.Protocol):
         port: int = 3310,
         loop: asyncio.AbstractEventLoop | None = None,
         name: str | None = None,
+        enable_ping: bool = False,
     ):
         """Set up base state."""
         self._ip = ip
         self._port = port
         self._name = name
+        self._enable_ping = enable_ping
         self._mac: str | None = None
         self._device: dict[str, str] = {}
         self._connectionStatus = API_DISCONNECTED
@@ -385,10 +387,11 @@ class IntesisBox(asyncio.Protocol):
 
     def _start_background_tasks(self) -> None:
         """Start background polling tasks."""
-        if not self._keepalive_task or self._keepalive_task.done():
-            self._keepalive_task = asyncio.run_coroutine_threadsafe(  # type: ignore[assignment]
-                self._keep_alive(), self._eventLoop
-            )
+        if self._enable_ping:
+            if not self._keepalive_task or self._keepalive_task.done():
+                self._keepalive_task = asyncio.run_coroutine_threadsafe(  # type: ignore[assignment]
+                    self._keep_alive(), self._eventLoop
+                )
         if not self._poll_temp_task or self._poll_temp_task.done():
             self._poll_temp_task = asyncio.run_coroutine_threadsafe(  # type: ignore[assignment]
                 self._poll_ambtemp(), self._eventLoop

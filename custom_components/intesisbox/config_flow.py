@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant, callback  # type: ignore
 from homeassistant.data_entry_flow import AbortFlow, FlowResult  # type: ignore
 
 from .const import (
+    CONF_ENABLE_PING,
     CONF_FAN_MODE_1,
     CONF_FAN_MODE_2,
     CONF_FAN_MODE_3,
@@ -48,6 +49,7 @@ from .const import (
     CONF_VANE_VERTICAL_9,
     CONF_VANE_VERTICAL_AUTO,
     CONF_VANE_VERTICAL_SWING,
+    DEFAULT_ENABLE_PING,
     DEFAULT_FAN_MODES,
     DEFAULT_NAME,
     DEFAULT_SYNC_TIME,
@@ -271,7 +273,7 @@ class IntesisBoxOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="device_not_ready")
 
         # Build menu options based on what device supports
-        menu_options = ["datetime_sync", "fan_modes"]
+        menu_options = ["options", "fan_modes"]
         if self._vane_vertical:
             menu_options.append("vane_vertical")
         if self._vane_horizontal:
@@ -505,16 +507,19 @@ class IntesisBoxOptionsFlow(config_entries.OptionsFlow):
             },
         )
 
-    async def async_step_datetime_sync(
+    async def async_step_options(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Configure datetime synchronization settings."""
+        """Configure integration options (ping and datetime sync)."""
         if user_input is not None:
-            # Update config entry with datetime sync settings
+            # Update config entry with options
             self.hass.config_entries.async_update_entry(
                 self._config_entry,
                 data={
                     **self._config_entry.data,
+                    CONF_ENABLE_PING: user_input.get(
+                        CONF_ENABLE_PING, DEFAULT_ENABLE_PING
+                    ),
                     CONF_SYNC_TIME: user_input.get(CONF_SYNC_TIME, DEFAULT_SYNC_TIME),
                     CONF_USE_LOCAL_TIME: user_input.get(
                         CONF_USE_LOCAL_TIME, DEFAULT_USE_LOCAL_TIME
@@ -526,6 +531,9 @@ class IntesisBoxOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_init()
 
         # Get current settings
+        current_enable_ping = self._config_entry.data.get(
+            CONF_ENABLE_PING, DEFAULT_ENABLE_PING
+        )
         current_sync_time = self._config_entry.data.get(
             CONF_SYNC_TIME, DEFAULT_SYNC_TIME
         )
@@ -534,9 +542,13 @@ class IntesisBoxOptionsFlow(config_entries.OptionsFlow):
         )
 
         return self.async_show_form(
-            step_id="datetime_sync",
+            step_id="options",
             data_schema=vol.Schema(
                 {
+                    vol.Optional(
+                        CONF_ENABLE_PING,
+                        default=current_enable_ping,
+                    ): bool,
                     vol.Optional(
                         CONF_SYNC_TIME,
                         default=current_sync_time,
